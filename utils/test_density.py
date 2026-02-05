@@ -6,11 +6,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image 
 
-from density import gen_density_map
+from utils.density import gen_density_map
 
 # paths
-IMG_DIR =  "../datasets/GX011278-fish-1-10/images"
-ANN_PATH = "../datasets/GX011278-fish-1-10/annotations.json"
+IMG_DIR =  "datasets/GX011278-fish-1-10/images"
+ANN_PATH = "datasets/GX011278-fish-1-10/annotations.json"
 
 # selected image 
 IMG_NAME="image_0.jpg"
