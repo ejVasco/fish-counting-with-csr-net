@@ -56,6 +56,10 @@ criterion = nn.MSELoss(reduction="sum")
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 # ----------------------------------- 
 # training loop
+
+best_epoch = -1 # will store best epoch model 
+best_val_loss = float("inf")
+
 for epoch in range(NUM_EPOCHS):
     model.train()
     train_loss = 0.0 
@@ -97,3 +101,10 @@ for epoch in range(NUM_EPOCHS):
         CHECKPOINT_DIR, f"csrnet_epoch_{epoch+1}.pth"
     )
     torch.save(model.state_dict(), ckpt_path)
+#-------------------------------- 
+# save best epoch / checkpoint 
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss 
+        best_epoch = epoch 
+        torch.save(model.state_dict, "best_model.pth")
+        print(f"new best model at epoch {epoch}")
