@@ -1,23 +1,99 @@
 import os
-import json
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-from PIL import Image
-from tqdm import tqdm
-import numpy as np
+import torch.nn as nn 
+from torch.utils.data import DataLoader
 
+from datasets.fish_dataset import FishDataset 
+from models.csrnet import CSRNet
 
-# training
-def train_model(dataset_path, 
-                epochs=10, 
-                batch_size=4, 
-                lr=1e-5, 
-                device="cuda" if torch.cuda.is_available() else "cpu"):
-    pass
+#-----------------------------
+# config 
+DATA_ROOT = "datasets"
+TRAIN_DATASETS = [
+    "GX011278-fish-1-10",
+    "GX011284-fish-41-50"
+]
+VAL_DATASETS = [
+    "GX011279-fish-11-20"
+]
 
-if __name__ == "__main__":
-    dataset_root = os.path.join("frames")
-    train_model(dataset_root)
+BATCH_SIZE = 4 
+NUM_EPOCHS = 50 
+LEARNING_RATE = 1e-5 
+CHECKPOINT_DIR = "checkpoints"
+
+os.makedirs(CHECKPOINT_DIR, exist_ok=True) # make/check checkpoint dir exist
+#----------------------------- 
+# devices
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+#-------------------------------- 
+# datasets & loaders 
+train_dataset = FishDataset(DATA_ROOT, TRAIN_DATASETS)
+val_dataset = FishDataset(DATA_ROOT, VAL_DATASETS)
+
+train_loader = DataLoader(
+    train_dataset, 
+    batch_size = BATCH_SIZE, 
+    shuffle = True,
+    num_workers = 4,
+    pin_memory = True
+)
+val_loader = DataLoader(
+    val_dataset,
+    batch_size = 1,
+    shuffle = False
+)
+
+print(f"Num of train samples {len(train_dataset)}")
+print(f"Num of val samples {len(val_dataset)}")
+#------------------------------- 
+# model 
+model = CSRNet(load_pretrained=True).to(device)
+#------------------------------------ 
+# loss & optimizer 
+criterion = nn.MSELoss(reduction="sum")
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+# ----------------------------------- 
+# training loop
+for epoch in range(NUM_EPOCHS):
+    model.train()
+    train_loss = 0.0 
+
+    for imgs, gt_density in train_loader:
+        imgs = imgs.to(device)
+        gt_density = gt_density.to(device)
+
+        pred_density = model(imgs)
+
+        loss = criterion(pred_density, gt_density)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step() 
+
+        train_loss += loss.item()
+
+    train_loss /= len(train_loader)
+    print(f"[Epohc: {epoch+1}/{NUM_EPOCHS}] train loss: {train_loss:.4f}")
+#------------------------------ 
+# validation (still in loop)
+    model.eval()
+    val_loss = 0.0
+
+    with torch.no_grad():
+        for imgs, gt_density in val_loader:
+            imgs = imgs.to(device)
+            gt_density = gt_density.to(device)
+
+            pred_density = model(imgs)
+            loss = criterion(pred_density, gt_density)
+            val_loss += loss.item()
+    val_loss /= len(val_loader)
+    print(f"    val loss: {val_loss:.4f}")
+# ---------------------------- 
+# save checkpoint 
+    ckpt_path = os.path.join(
+        CHECKPOINT_DIR, f"csrnet_epoch_{epoch+1}.pth"
+    )
+    torch.save(model.state_dict(), ckpt_path)
