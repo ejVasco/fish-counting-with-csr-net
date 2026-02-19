@@ -212,5 +212,5 @@ datasets/GX*
 datasets/yellow*
 datasets/10*
 datasets/blue*
-checkpoints/*
+*.pth
 videos/GX*
