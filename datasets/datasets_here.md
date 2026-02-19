@@ -1,7 +1,6 @@
 Here is an example of how datasets are structured.
 
 ```
-```
 datasets/
 └─ dataset_title
    ├─ annotations.json
@@ -9,7 +8,6 @@ datasets/
       ├─ image_0.jpg
       ├─ ...
       └─ image_99.jpg
-```
 ```
 
 
