@@ -1,4 +1,4 @@
-Here is an example of how datasets are structured.
+Here is an example of how datasets are structured
 
 ```
 datasets/

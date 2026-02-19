@@ -9,11 +9,11 @@ from PIL import Image
 from utils.density import gen_density_map
 
 # paths
-IMG_DIR =  "datasets/GX011278-fish-1-10/images"
-ANN_PATH = "datasets/GX011278-fish-1-10/annotations.json"
+IMG_DIR =  "datasets/yellow_tank_1/images"
+ANN_PATH = "datasets/yellow_tank_1/annotations.json"
 
 # selected image, all we need is the dimensions for testing
-IMG_NAME="image_0.jpg"
+IMG_NAME="image_201.jpg"
 img_path = os.path.join(IMG_DIR, IMG_NAME)
 img = Image.open(img_path).convert("RGB")
 img_np = np.array(img) # convert PIL img -> np array 
