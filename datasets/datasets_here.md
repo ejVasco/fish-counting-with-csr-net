@@ -1,12 +1,17 @@
 Here is an example of how datasets are structured.
 
-- datasets/
-    - GX011278-fish-1-10
-        - annotations.json
-        - images/
-            - image_0.jpg
-            - ...
-            - image_99.jpg
+```
+```
+datasets/
+└─ dataset_title
+   ├─ annotations.json
+   └─ images/
+      ├─ image_0.jpg
+      ├─ ...
+      └─ image_99.jpg
+```
+```
+
 
 annotations.json is as follows:
 ```json
