@@ -209,4 +209,8 @@ __marimo__/
 # added
 frames/GX*
 datasets/GX*
+datasets/yellow*
+datasets/10*
+datasets/blue*
+checkpoints/*
 videos/GX*
