@@ -1,4 +1,5 @@
 # script for generating density maps
+# from image and json annotations
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
