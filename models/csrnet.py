@@ -1,13 +1,19 @@
 import torch.nn as nn 
 import torchvision.models as models
+from torchvision.models import VGG16_Weights
 
 # TODO: better comments
 class CSRNet(nn.Module):
     def __init__(self, load_pretrained=True):
         super(CSRNet, self).__init__()
 
+        if load_pretrained:
+            weights = VGG16_Weights.IMAGENET1K_V1
+        else:
+            weights = None
+
         # csr net frontend: vgg16 convolution layers
-        vgg = models.vgg16(pretrained=load_pretrained)
+        vgg = models.vgg16(weights=weights)
         self.frontend = nn.Sequential(*list(vgg.features.children())[:23])
 
         # backend: dilated convolutions to ..........
