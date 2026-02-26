@@ -1,3 +1,7 @@
+# Primary source
+# https://www.rootstrap.com/blog/how-to-build-a-crowd-counting-model-using-csrnet
+
+
 import sys
 import h5py
 import scipy.io as io 
@@ -49,6 +53,18 @@ def main():
 
     checkpoint = torch.load(model_path, map_location="cpu", weights_only=False) # TODO: cpu or gpu 
     model.load_state_dict(checkpoint)
+
+    print("og image")
+    plt.imshow(plt.imread(test_img_path))
+    plt.show() 
+
+    img = transform(Image.open(test_img_path).convert('RGB'))
+    output = model(img.unsqueeze(0))
+    print("predicted count: ", int(output.detach().cpu().sum().numpy()))
+    temp = np.asarray(output.detach().cpu().reshape(output.detach().cpu().shape[2],output.detach().cpu().shape[3]))
+    plt.imshow(temp,cmap = c.jet)
+    plt.show()
+
 
 
 if __name__ == "__main__":
