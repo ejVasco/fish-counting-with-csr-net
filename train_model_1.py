@@ -79,7 +79,7 @@ for epoch in range(NUM_EPOCHS):
         train_loss += loss.item()
 
     train_loss /= len(train_loader)
-    print(f"[Epohc: {epoch+1}/{NUM_EPOCHS}] train loss: {train_loss:.4f}")
+    print(f"[Epoch: {epoch+1}/{NUM_EPOCHS}] train loss: {train_loss:.4f}")
 #------------------------------ 
 # validation (still in loop)
     model.eval()
@@ -106,5 +106,5 @@ for epoch in range(NUM_EPOCHS):
     if val_loss < best_val_loss:
         best_val_loss = val_loss 
         best_epoch = epoch+1 
-        torch.save(model.state_dict, "best_model.pth")
+        torch.save(model.state_dict(), "best_model.pth")
         print(f"new best model at epoch {epoch+1}")
