@@ -1,1 +1,0 @@
-# script for extracting frames from videos
