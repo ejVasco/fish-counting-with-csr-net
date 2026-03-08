@@ -10,11 +10,12 @@ from models.csrnet import CSRNet
 # config 
 DATA_ROOT = "datasets"
 TRAIN_DATASETS = [
-    "GX011278-fish-1-10",
-    "GX011284-fish-41-50"
+    "yellow_tank_2",
+    "GX011279-fish-11-20",
 ]
 VAL_DATASETS = [
-    "GX011279-fish-11-20"
+    "yellow_tank_1",
+    "blue_tank_2",
 ]
 
 BATCH_SIZE = 4 
