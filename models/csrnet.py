@@ -1,6 +1,7 @@
-import torch.nn as nn 
+import torch.nn as nn
 import torchvision.models as models
 from torchvision.models import VGG16_Weights
+
 
 # TODO: better comments
 class CSRNet(nn.Module):
