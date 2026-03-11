@@ -14,7 +14,7 @@ import torch
 # from scipy.ndimage import gaussian_filter
 # import scipy
 # import torchvision.transforms.functional as F
-from matplotlib import cm as c
+from matplotlib import cm
 from matplotlib import pyplot as plt
 from torchvision import transforms
 
@@ -73,15 +73,15 @@ def main():
     plt.imshow(plt.imread(test_img_path))
     plt.show()
 
-    img = transform(Image.open(test_img_path).convert("RGB"))
-    output = model(img.unsqueeze(0))
+    trans_img = transform(Image.open(test_img_path).convert("RGB"))
+    output = model(trans_img.unsqueeze(0))
     print("predicted count: ", int(output.detach().cpu().sum().numpy()))
     temp = np.asarray(
         output.detach()
         .cpu()
         .reshape(output.detach().cpu().shape[2], output.detach().cpu().shape[3])
     )
-    plt.imshow(temp, cmap=c.jet)
+    plt.imshow(temp, cmap=cm.jet)
     plt.show()
 
 
