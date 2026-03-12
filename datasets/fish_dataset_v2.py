@@ -63,10 +63,14 @@ class FishDataset(Dataset):
         if image is None:
             raise RuntimeError(f"failed to load image {sample['image_path']}")
 
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # convert loaded image for compatability
+        image = cv2.cvtColor(
+            image, cv2.COLOR_BGR2RGB
+        )  # convert from opencv bgr to standard rgb
         image = (
             image.astype(np.float32) / 255.0
         )  # converts image values from int to float
+        # important for numpy and pytorch (and therefore my csrnet)
 
         # resize image if longest size has more pixels than {max_size}
         H, W, _ = image.shape
@@ -84,12 +88,16 @@ class FishDataset(Dataset):
             scaled_points.append((x * scale, y * scale))
 
         density = gen_density_map((new_H, new_W), scaled_points)
+        # downsample by 8 for csrnet
         density = cv2.resize(
             density, (new_W // 8, new_H // 8), interpolation=cv2.INTER_CUBIC
         )
+
+        # adjust density to remain the same after downsamples:
         density *= (new_H * new_W) / ((new_H // 8) * (new_W // 8))
 
+        # convert to pythorch format
         image = torch.from_numpy(image).permute(2, 0, 1)
+        # added dimension channel (required by cnn)
         density = torch.from_numpy(density).unsqueeze(0)
-
         return image, density
