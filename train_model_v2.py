@@ -8,6 +8,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
+from datasets.fish_dataset_v2 import FishDataset
 from models.csrnet import CSRNet
 
 DATA_ROOT = "datasets"  # path relative to project home dir
@@ -25,10 +26,10 @@ ALL_DATASETS = [
 # how the dataset is split, adds up to 1.0
 TRAIN_RATIO = 0.70
 VAL_RATIO = 0.15
-TEST_RATIO = 0.15
+# TEST_RATIO = 1.0 - TRAIN_RATIO - VAL_RATIO during code execution
 
 # training config
-# RNG_SEED = 42 # use to reproduce training with same seed
+RNG_SEED = None  # use to reproduce splits for training
 BATCH_SIZE = 4
 NUM_EPOCHS = 50
 LEARNING_RATE = 1e-5
@@ -67,15 +68,57 @@ def gather_samples(
                     {"image_path": os.path.join(images_dir, img_name), "points": points}
                 )
         if not samples:
-            print(f"    skipping dataset: {dataset_path}, due to no .jpg entries found\n")
+            print(
+                f"    skipping dataset: {dataset_path}, due to no .jpg entries found\n"
+            )
             continue
 
         gathered[name] = samples
     return gathered
 
 
-def split_samples(gathered_samples: dict[str,list[dict]],train_ratio:float, val_ratio: float):
+def split_samples(
+    gathered_samples: dict[str, list[dict]],
+    train_ratio: float,
+    val_ratio: float,
+    seed=None,
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """
+    Each dataset gets split and included in training, validation, and testing.
+    Optional seed to use consistent splits
+    """
+    train_samples, val_samples, test_samples = [], [], []
+    rng = random.Random(seed)
 
+    test_ratio = 1.0 - train_ratio - val_ratio
+    if train_ratio <= 0.0 or val_ratio <= 0.0 or test_ratio <= 0.0:
+        # print(f"invalid train/val/ratio split: {train_ratio}:{val_ratio}:{test_ratio}")
+        raise ValueError(
+            f"invalid train/val/test split: {train_ratio}/{val_ratio}/{test_ratio}\n"
+        )
+
+    for name, samples in gathered_samples.items():
+        print(f"  splitting {name}\n")
+        shuffled = samples[:]  # copy samples instead of shufflying samples just in case
+        rng.shuffle(shuffled)
+
+        n = len(shuffled)
+        n_train = max(1, int(n * train_ratio))
+        n_val = max(1, int(n * val_ratio))
+        # ensure every split has at least 1 sample
+        n_train = min(n_train, n - 2)
+        n_val = min(n_val, n - 1)
+        n_test = n - n_train - n_val
+
+        train_samples.extend(shuffled[:n_train])
+        val_samples.extend(shuffled[n_train : n_train + n_val])
+        test_samples.extend(shuffled[n_train + n_val :])
+
+        print(
+            f"    {name} has {n} images -> training:{n_train}, val:{n_val}, test:{n_test}\n"
+        )
+
+    return train_samples, val_samples, test_samples
 
 
 def save_test_paths(
@@ -96,10 +139,6 @@ def save_test_paths(
 def main():
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    if TRAIN_RATIO + VAL_RATIO + TEST_RATIO != 1.0:
-        print(f"invalid split ratios. train: {TRAIN_RATIO}, val: {VAL_RATIO}, test: {TEST_RATIO}")
-        return
-
     # gather samples
     print("gathering samples from datasets\n")
     gathered_samples = gather_samples(DATA_ROOT, ALL_DATASETS)
@@ -108,6 +147,78 @@ def main():
 
     # split samples
     print("splitting gathered samples\n")
+    train_samples, val_samples, test_samples = split_samples(
+        gathered_samples, TRAIN_RATIO, VAL_RATIO, seed=RNG_SEED
+    )
+
+    # save test samples to txt to use for testing later:
+    print(f"Writing test_samples to {TEST_FILES_OUT}\n")
+    save_test_paths(test_samples, TEST_FILES_OUT)
+
+    # from samples -> datasets
+    train_dataset = FishDataset(samples=train_samples)
+    val_dataset = FishDataset(samples=val_samples)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+
+    # device and model
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}\n")
+    model = CSRNet(load_pretrained=True).to(device)
+
+    criterion = nn.MSELoss(reduction="sum")
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    best_val_loss = float("inf")
+
+    for epoch in range(NUM_EPOCHS):
+        # train
+        model.train()
+        train_loss = 0.0
+
+        for imgs, gt_density in train_loader:
+            imgs = imgs.to(device)
+            gt_density = gt_density.to(device)
+
+            pred_density = model(imgs)
+            loss = criterion(pred_density, gt_density)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item()
+        train_loss /= len(train_loader)
+        print(f"[Epoch {epoch + 1}/{NUM_EPOCHS}] train loss: {train_loss:.4f}")
+
+        # validate
+        model.eval()
+        val_loss = 0.0
+
+        with torch.no_grad():
+            for imgs, gt_density in val_loader:
+                imgs = imgs.to(device)
+                gt_density = gt_density.to(device)
+                val_loss += criterion(model(imgs), gt_density).item()
+
+        val_loss /= len(val_loader)
+        print(f"  val loss {val_loss:.4f}")
+
+        # checkpoint every epoch
+        chkpnt_path = os.path.join(CHECKPOINT_DIR, f"csrnet_epoch{epoch + 1}.pth")
+        torch.save(model.state_dict(), chkpnt_path)
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), "best_model.pth")
+            print(
+                f"    - new best model at epoch {epoch + 1} with val loss {best_val_loss:.4f}"
+            )
 
 
 if __name__ == "__main__":
