@@ -51,11 +51,11 @@ def gather_samples(
         images_dir = os.path.join(dataset_path, "images")
         json_path = os.path.join(dataset_path, "annotations.json")
 
-        print(f"  gathering samples from dataset: {dataset_path}\n")
+        # print(f"  gathering samples from dataset: {dataset_path}\n")
 
         if not os.path.exists(json_path):
             print(
-                f"    skipping dataset: {dataset_path} . due to missing path: {json_path}\n"
+                f"    skipping dataset: {dataset_path} . due to missing path: {json_path}"
             )
             continue
         with open(json_path, "r") as f:
@@ -68,9 +68,7 @@ def gather_samples(
                     {"image_path": os.path.join(images_dir, img_name), "points": points}
                 )
         if not samples:
-            print(
-                f"    skipping dataset: {dataset_path}, due to no .jpg entries found\n"
-            )
+            print(f"    skipping dataset: {dataset_path}, due to no .jpg entries found")
             continue
 
         gathered[name] = samples
@@ -98,7 +96,7 @@ def split_samples(
         )
 
     for name, samples in gathered_samples.items():
-        print(f"  splitting {name}\n")
+        # print(f"  splitting {name}\n")
         shuffled = samples[:]  # copy samples instead of shufflying samples just in case
         rng.shuffle(shuffled)
 
@@ -115,7 +113,7 @@ def split_samples(
         test_samples.extend(shuffled[n_train + n_val :])
 
         print(
-            f"    {name} has {n} images -> training:{n_train}, val:{n_val}, test:{n_test}\n"
+            f"    {name} has {n} images -> training:{n_train}, val:{n_val}, test:{n_test}"
         )
 
     return train_samples, val_samples, test_samples
@@ -169,7 +167,7 @@ def main():
 
     # device and model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}\n")
+    print(f"Using device: {device}")
     model = CSRNet(load_pretrained=True).to(device)
 
     criterion = nn.MSELoss(reduction="sum")
