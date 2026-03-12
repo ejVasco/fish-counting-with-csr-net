@@ -38,12 +38,13 @@ LEARNING_RATE = 1e-5
 CHECKPOINT_DIR = "checkpoints"  # path relatie to project home dir
 TEST_FILES_OUT = "test_data.txt"  # outputs files to input into test_model.py
 
-def pad_collate(batch)
+
+def pad_collate(batch):
     """
     make imgs in a batch uniform dimensions via padding as required by torch nn
     (and density data)
     """
-    imgs,densities = zip(*batch)
+    imgs, densities = zip(*batch)
 
     # get max H and max W in this batch
     max_H = max(img.shape[1] for img in imgs)
@@ -58,13 +59,11 @@ def pad_collate(batch)
         padded_imgs.append(F.pad(img, (0, pad_W, 0, pad_H)))
 
         # density has [1, height//8, width//8]
-        den_pad_H = (max_H //8)-density.shape[1]
-        den_pad_W = (max_W//8)-density.shape[2]
-        padded_densities.append(F.pad(density,(0, den_pad_W, 0, den_pad_H)))
+        den_pad_H = (max_H // 8) - density.shape[1]
+        den_pad_W = (max_W // 8) - density.shape[2]
+        padded_densities.append(F.pad(density, (0, den_pad_W, 0, den_pad_H)))
 
     return torch.stack(padded_imgs), torch.stack(padded_densities)
-
-
 
 
 def gather_samples(
