@@ -4,10 +4,12 @@ import random
 
 import torch
 import torch.nn as nn
-from PIL import Image
-from torch.utils.data import DataLoader, Dataset
-from torchvision import transforms
+import torch.nn.functional as F
 
+# from PIL import Image
+from torch.utils.data import DataLoader  # , Dataset
+
+# from torchvision import transforms
 from datasets.fish_dataset_v2 import FishDataset
 from models.csrnet import CSRNet
 
@@ -35,6 +37,34 @@ NUM_EPOCHS = 50
 LEARNING_RATE = 1e-5
 CHECKPOINT_DIR = "checkpoints"  # path relatie to project home dir
 TEST_FILES_OUT = "test_data.txt"  # outputs files to input into test_model.py
+
+def pad_collate(batch)
+    """
+    make imgs in a batch uniform dimensions via padding as required by torch nn
+    (and density data)
+    """
+    imgs,densities = zip(*batch)
+
+    # get max H and max W in this batch
+    max_H = max(img.shape[1] for img in imgs)
+    max_W = max(img.shape[2] for img in imgs)
+
+    padded_imgs = []
+    padded_densities = []
+    for img, density in zip(imgs, densities):
+        # image has [channels, height, width]
+        pad_H = max_H - img.shape[1]
+        pad_W = max_W - img.shape[2]
+        padded_imgs.append(F.pad(img, (0, pad_W, 0, pad_H)))
+
+        # density has [1, height//8, width//8]
+        den_pad_H = (max_H //8)-density.shape[1]
+        den_pad_W = (max_W//8)-density.shape[2]
+        padded_densities.append(F.pad(density,(0, den_pad_W, 0, den_pad_H)))
+
+    return torch.stack(padded_imgs), torch.stack(padded_densities)
+
+
 
 
 def gather_samples(
@@ -161,6 +191,7 @@ def main():
         shuffle=True,
         num_workers=4,
         pin_memory=True,
+        collate_fn=pad_collate,
     )
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
