@@ -92,7 +92,7 @@ def split_samples(
     if train_ratio <= 0.0 or val_ratio <= 0.0 or test_ratio <= 0.0:
         # print(f"invalid train/val/ratio split: {train_ratio}:{val_ratio}:{test_ratio}")
         raise ValueError(
-            f"invalid train/val/test split: {train_ratio}/{val_ratio}/{test_ratio}\n"
+            f"invalid train/val/test split: {train_ratio}/{val_ratio}/{test_ratio}"
         )
 
     for name, samples in gathered_samples.items():
@@ -131,26 +131,25 @@ def save_test_paths(
     with open(out_path, "w") as f:
         f.write("\n".join(paths) + "\n")
 
-    print(f" list of test files saved to {out_path} with {len(paths)} files\n")
+    print(f" list of test files saved to {out_path} with {len(paths)} files")
 
 
 def main():
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
     # gather samples
-    print("gathering samples from datasets\n")
+    print("gathering samples from datasets")
     gathered_samples = gather_samples(DATA_ROOT, ALL_DATASETS)
     total = sum(len(v) for v in gathered_samples.values())
-    print(f" total gathered samples: {total}\n")
+    print(f" total gathered samples: {total}")
 
     # split samples
-    print("splitting gathered samples\n")
+    print("splitting gathered samples")
     train_samples, val_samples, test_samples = split_samples(
         gathered_samples, TRAIN_RATIO, VAL_RATIO, seed=RNG_SEED
     )
 
     # save test samples to txt to use for testing later:
-    print(f"Writing test_samples to {TEST_FILES_OUT}\n")
     save_test_paths(test_samples, TEST_FILES_OUT)
 
     # from samples -> datasets
