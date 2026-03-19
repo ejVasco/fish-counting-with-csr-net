@@ -214,4 +214,4 @@ datasets/10*
 datasets/blue*
 *.pth
 videos/GX*
-*_samples.txt
+*_data.txt
