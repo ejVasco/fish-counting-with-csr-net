@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.models as models
 from torchvision.models import VGG16_Weights
 
@@ -37,4 +38,10 @@ class CSRNet(nn.Module):
     def forward(self, x):
         x = self.frontend(x)
         x = self.backend(x)
+
+        # 2 methods of negative clamping, use one at a time
+        # ReLu
+        # x = F.relu(x)
+        # Softplus
+        x = F.softplus(x)
         return x
