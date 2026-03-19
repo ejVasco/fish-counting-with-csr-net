@@ -180,6 +180,8 @@ def main():
 
     # save test samples to txt to use for testing later:
     save_test_paths(test_samples, TEST_FILES_OUT)
+    save_test_paths(train_samples, "train_samples.txt")
+    save_test_paths(val_samples, "val_samples.txt")
 
     # from samples -> datasets
     train_dataset = FishDataset(samples=train_samples)
