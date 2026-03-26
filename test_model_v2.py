@@ -42,7 +42,7 @@ def predict(model, img_path, device, clamp=True):
     img = Image.open(img_path).convert("RGB")
     tensor = TRANSFORM(img).unsqueeze(0).to(device)
 
-    with torch.no_grad()
+    with torch.no_grad():
         output = model(tensor)
 
     raw_count = float(output.sum().cpu().item())
@@ -55,13 +55,17 @@ def predict(model, img_path, device, clamp=True):
 
     return raw_count, final_count, density, img
 
-def visualize(img, density, raw_count, final_count, img_path, show=True, save_path=None):
+
+def visualize(
+    img, density, raw_count, final_count, img_path, show=True, save_path=None
+):
     pass
+
 
 def print_summary(results, clamp):
     counts = [r["final"] for r in results]
     raw_counts = [r["raw"] for r in results]
-    n_negative = sum(1 for r in raw_counts if r<0)
+    n_negative = sum(1 for r in raw_counts if r < 0)
 
     print(
         "----------------------------------------------\n"
@@ -165,20 +169,30 @@ def main():
             f"  {os.path.basename(img_path)}{flag}\n"
         )
 
-        results.append({
-            "path": img_path,
-            "name": os.path.basename(img_path),
-            "raw": raw,
-            "final" : final,
-        })
+        results.append(
+            {
+                "path": img_path,
+                "name": os.path.basename(img_path),
+                "raw": raw,
+                "final": final,
+            }
+        )
 
         save_path = None
         if save:
-            pass # TODO: savinhg
-
+            pass  # TODO: savinhg
 
         if not headless or save:
-            visualize(og_img, density, raw, final, img_path=img_path, show=not headless, save_path=save_path)
+            visualize(
+                og_img,
+                density,
+                raw,
+                final,
+                img_path=img_path,
+                show=not headless,
+                save_path=save_path,
+            )
+
 
 if __name__ == "__main__":
     main()
