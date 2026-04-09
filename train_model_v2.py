@@ -31,7 +31,7 @@ VAL_RATIO = 0.15
 # TEST_RATIO = 1.0 - TRAIN_RATIO - VAL_RATIO during code execution
 
 # training config
-RNG_SEED = None  # use to reproduce splits for training
+RNG_SEED = 71  # use to reproduce splits for training
 BATCH_SIZE = 4
 NUM_EPOCHS = 50
 LEARNING_RATE = 1e-5

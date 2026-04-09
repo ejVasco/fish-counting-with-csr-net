@@ -11,7 +11,7 @@ from utils.density import gen_density_map
 
 class FishDataset(Dataset):
     def __init__(
-        self, datasets_dir=None, dataset_names=None, max_size=1024, samples=None
+        self, datasets_dir=None, dataset_names=None, max_size=512, samples=None
     ):
         """
         can be constructed with exculsively 2 options (not both)
