@@ -81,6 +81,11 @@ class FishDataset(Dataset):
         new_H = int(H * scale)
         if scale != 1.0:
             image = cv2.resize(image, (new_W, new_H))
+
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        image = (image - mean) / std
+
         # load and scale points to resized image
         points = sample["points"]
         scaled_points = []
@@ -90,11 +95,9 @@ class FishDataset(Dataset):
         density = gen_density_map((new_H, new_W), scaled_points)
         # downsample by 8 for csrnet
         density = cv2.resize(
-            density, (new_W // 8, new_H // 8), interpolation=cv2.INTER_CUBIC
+            density, (new_W // 8, new_H // 8), interpolation=cv2.INTER_AREA
         )
-
-        # adjust density to remain the same after downsamples:
-        density *= (new_H * new_W) / ((new_H // 8) * (new_W // 8))
+        density *= 64.0
 
         # convert to pythorch format
         image = torch.from_numpy(image).permute(2, 0, 1)

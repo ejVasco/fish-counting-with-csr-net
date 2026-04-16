@@ -23,6 +23,7 @@ ALL_DATASETS = [
     "GX011284-fish-41-50",
     "yellow_tank_1",
     "yellow_tank_2",
+    "calibration_0fish",
 ]
 
 # how the dataset is split, adds up to 1.0
@@ -33,7 +34,7 @@ VAL_RATIO = 0.15
 # training config
 RNG_SEED = 71  # use to reproduce splits for training
 BATCH_SIZE = 4
-NUM_EPOCHS = 50
+NUM_EPOCHS = 4
 LEARNING_RATE = 1e-5
 CHECKPOINT_DIR = "checkpoints"  # path relatie to project home dir
 TEST_FILES_OUT = "test_data.txt"  # outputs files to input into test_model.py
@@ -201,8 +202,13 @@ def main():
     print(f"Using device: {device}")
     model = CSRNet(load_pretrained=True).to(device)
 
-    criterion = nn.MSELoss(reduction="sum")
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    mse_loss = nn.MSELoss()
+
+
+    optimizer = torch.optim.Adam([
+        {'params': model.frontend.parameters(), 'lr': 1e-6},
+        {'params': model.backend.parameters(),  'lr': 1e-5},
+    ])
 
     best_val_loss = float("inf")
 
@@ -216,7 +222,7 @@ def main():
             gt_density = gt_density.to(device)
 
             pred_density = model(imgs)
-            loss = criterion(pred_density, gt_density)
+            loss = mse_loss(pred_density, gt_density)
 
             optimizer.zero_grad()
             loss.backward()
@@ -231,17 +237,28 @@ def main():
         val_loss = 0.0
 
         with torch.no_grad():
-            for imgs, gt_density in val_loader:
+            for i, (imgs, gt_density) in enumerate(val_loader):
                 imgs = imgs.to(device)
                 gt_density = gt_density.to(device)
-                val_loss += criterion(model(imgs), gt_density).item()
+
+                pred = model(imgs)
+
+                val_loss += (0.5 *mse_loss(pred, gt_density) + 0.5 * l1_loss(pred, gt_density)).item()
+
+                pred_count = pred.sum().item()
+                gt_count = gt_density.sum().item()
+
+                print(f"pred_count={pred_count:.2f}, gt_count={gt_count:.2f}, ratio= {(pred_count/gt_count):.2f}")
+
+                if i >= 10:
+                    break
 
         val_loss /= len(val_loader)
-        print(f"  val loss {val_loss:.4f}")
+        print(f"  val loss {val_loss:.8f}")
 
         # checkpoint every epoch
-        chkpnt_path = os.path.join(CHECKPOINT_DIR, f"csrnet_epoch{epoch + 1}.pth")
-        torch.save(model.state_dict(), chkpnt_path)
+        # chkpnt_path = os.path.join(CHECKPOINT_DIR, f"csrnet_epoch{epoch + 1}.pth")
+        # torch.save(model.state_dict(), chkpnt_path)
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model.state_dict(), "best_model.pth")
