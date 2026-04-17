@@ -93,14 +93,21 @@ class FishDataset(Dataset):
             scaled_points.append((x * scale, y * scale))
 
         density = gen_density_map((new_H, new_W), scaled_points)
-        # downsample by 8 for csrnet
-        density = cv2.resize(
-            density, (new_W // 8, new_H // 8), interpolation=cv2.INTER_AREA
-        )
-        density *= 64.0
 
-        # convert to pythorch format
-        image = torch.from_numpy(image).permute(2, 0, 1)
-        # added dimension channel (required by cnn)
-        density = torch.from_numpy(density).unsqueeze(0)
+        # downsample gt to match csrnet output 
+        density = cv2.resize(
+            density, 
+            (new_W // 8, new_H // 8),
+            interpolation=cv2.INTER_AREA
+        )
+        density = density * (8*8)
+
+        # convert to torch tensor 
+        density = torch.from_numpy(density).unsqueeze(0).float()
+
+        # convert image to torch format
+        image = torch.from_numpy(image).permute(2,0,1)
+
         return image, density
+
+
