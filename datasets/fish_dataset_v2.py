@@ -1,5 +1,6 @@
 import json
 import os
+import random
 
 import cv2
 import numpy as np
@@ -94,20 +95,25 @@ class FishDataset(Dataset):
 
         density = gen_density_map((new_H, new_W), scaled_points)
 
-        # downsample gt to match csrnet output 
+        # downsample gt to match csrnet output
         density = cv2.resize(
-            density, 
-            (new_W // 8, new_H // 8),
-            interpolation=cv2.INTER_AREA
+            density, (new_W // 8, new_H // 8), interpolation=cv2.INTER_AREA
         )
-        density = density * (8*8)
+        density = density * (8 * 8)
 
-        # convert to torch tensor 
+        # random flipping horizontally
+        if random.random() > 0.5:
+            image = np.fliplr(image).copy()
+            density = np.fliplr(density).copy()
+        # if random.random() > 0.5:
+        #     image = np.flipud(image).copy()
+        # density = np.flipud(density).copy()
+        # leave as copies to avoid numpy "stride issues" ?
+
+        # convert to torch tensor
         density = torch.from_numpy(density).unsqueeze(0).float()
 
         # convert image to torch format
-        image = torch.from_numpy(image).permute(2,0,1)
+        image = torch.from_numpy(image).permute(2, 0, 1)
 
         return image, density
-
-
