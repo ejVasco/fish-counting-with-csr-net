@@ -212,3 +212,4 @@ __marimo__/
 *.pth
 *.mp4
 *_data.txt
+*genblankjson.py
