@@ -1,4 +1,5 @@
 # ./test_model_v2.py
+import json
 import os
 import sys
 
@@ -12,6 +13,35 @@ from torchvision import transforms
 from models.csrnet import CSRNet
 
 
+def load_gt_count(img_path):
+    """
+    looks up ground truth fish count for image by reading corresponding annotations.json
+
+    expects paths in form: ./datasets/<dataset_name>/images/<img>.jpg
+    returns the point count as an int or None if the annotation can't be found
+    """
+    # walk up 2 levels:
+    # Walk up two levels:  images/ -> dataset_dir -> find annotations.json
+    images_dir = os.path.dirname(img_path)
+    dataset_dir = os.path.dirname(images_dir)
+    json_path = os.path.join(dataset_dir, "annotations.json")
+
+    if not os.path.isfile(json_path):
+        return None
+
+    img_name = os.path.basename(img_path)
+
+    try:
+        with open(json_path, "r") as f:
+            annotations = json.load(f)
+        points = annotations.get(img_name)
+        if points is None:
+            return None
+        return len(points)
+    except Exception:
+        return None
+
+
 def load_model(model_path, device):
     model = CSRNet()
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
@@ -23,7 +53,7 @@ def load_model(model_path, device):
         model.load_state_dict(checkpoint)
 
     model.to(device)
-    model.eval
+    model.eval()
     return model
 
 
@@ -48,7 +78,7 @@ def predict(model, img_path, device, clamp=True):
     raw_count = float(output.sum().cpu().item())
 
     if clamp:
-        output = output.clam(min=0)
+        output = output.clamp(min=0)
 
     density = output.squeeze().cpu().numpy()
     final_count = float(density.sum())
@@ -162,11 +192,18 @@ def main():
         except Exception as e:
             print(f"    error predicting {img_path} ({e})")
             continue
+
+        gt_count = load_gt_count(img_path)
+        gt_str = f"{gt_count}" if gt_count is not None else "N/A"
+        error_str = (
+            f"{abs(round(final) - gt_count):+d}" if gt_count is not None else "N/A"
+        )
+
         flag = " <- negative" if raw < 0 else ""
         print(
             f"[{i:>2}/{total}] raw: {raw:>+8.2f}\n"
-            f"  clamped: {final:>6.1f}  rounded: {round(final):>4}\n"
-            f"  {os.path.basename(img_path)}{flag}\n"
+            f"  clamped: {final:>6.1f}  rounded: {round(final):>4}  gt: {gt_str:>4}  error: {error_str}\n"
+            f"  {img_path}\n"
         )
 
         results.append(
@@ -175,6 +212,7 @@ def main():
                 "name": os.path.basename(img_path),
                 "raw": raw,
                 "final": final,
+                "gt": gt_count,
             }
         )
 
@@ -192,6 +230,13 @@ def main():
                 show=not headless,
                 save_path=save_path,
             )
+
+    gt_results = [r for r in results if r["gt"] is not None]
+    if gt_results:
+        mae = sum(abs(round(r["final"]) - r["gt"]) for r in gt_results) / len(
+            gt_results
+        )
+        print(f"MAE over {len(gt_results)} images: {mae:.4f}")
 
 
 if __name__ == "__main__":
