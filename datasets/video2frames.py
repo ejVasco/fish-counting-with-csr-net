@@ -1,18 +1,18 @@
-# video2frames.py
+# datasets/video2frames.py
 
 import sys
-import os 
+import os
 import cv2
 
 def extract_frames(video_path: str, num_frames: int):
     if not os.path.exists(video_path):
         print(f"error: video file not found {video_path}")
-        return 
+        return
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"error: failed to open video: {video_path}")
-        return 
+        return
 
     # prevent capturing more frames than is in video
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -37,7 +37,7 @@ def extract_frames(video_path: str, num_frames: int):
     extracted = 0
     for i in indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, i)
-        ret, frame = cap.read() 
+        ret, frame = cap.read()
         if not ret:
             print(f"warn: could not read frame {i}, skipped")
             continue
@@ -51,7 +51,7 @@ def extract_frames(video_path: str, num_frames: int):
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("USage: python -m datasets.video2frames <vid_path> <num_frames>")
-        sys.exit(1) 
+        sys.exit(1)
 
     video_path = sys.argv[1]
 
