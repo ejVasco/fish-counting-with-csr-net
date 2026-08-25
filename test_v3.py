@@ -92,20 +92,70 @@ def visualize(
     pass
 
 
-def print_summary(results, clamp):
-    counts = [r["final"] for r in results]
-    raw_counts = [r["raw"] for r in results]
-    n_negative = sum(1 for r in raw_counts if r < 0)
+# to do: rewrite print summary
 
-    print(
-        "----------------------------------------------\n"
-        f" RESULTS SUMMARY ({len(results)} images)\n"
-        "------------------------------------------------\n"
-        f"  {'Image':<45} {'Raw':>8} {'Clamped':>8} {'Rounded':>7}\n"
-        "---------------------------------------------------\n"
+
+def print_summary(results, model_path, data_path):
+    """
+    Prints a professor-friendly summary grouped by dataset.
+    """
+    gt_results = [r for r in results if r["gt"] is not None]
+
+    # group results by dataset name (2 levels up from image path)
+    datasets = {}
+    for r in gt_results:
+        # path looks like: datasets/<name>/images/<img>.jpg
+        dataset_name = os.path.basename(os.path.dirname(os.path.dirname(r["path"])))
+        datasets.setdefault(dataset_name, []).append(r)
+
+    overall_mae = (
+        sum(abs(round(r["final"]) - r["gt"]) for r in gt_results) / len(gt_results)
+        if gt_results
+        else float("nan")
     )
 
-    # TODO - finish print summary
+    W = 74
+    div = "=" * W
+    thin = "-" * W
+
+    print(f"\n{div}")
+    print(f"  RESULTS SUMMARY")
+    print(f"  model : {model_path}")
+    print(
+        f"  data  : {data_path}  ({len(results)} images, {len(gt_results)} with ground truth)"
+    )
+    print(div)
+
+    # per-dataset table
+    col = f"  {'Dataset':<34} {'N':>3}  {'Avg GT':>6}  {'Avg Pred':>8}  {'MAE':>6}  {'Worst':>6}"
+    print(col)
+    print(thin)
+
+    dataset_maes = []
+    for name, rows in sorted(datasets.items()):
+        n = len(rows)
+        avg_gt = sum(r["gt"] for r in rows) / n
+        avg_pred = sum(round(r["final"]) for r in rows) / n
+        mae = sum(abs(round(r["final"]) - r["gt"]) for r in rows) / n
+        worst = max(abs(round(r["final"]) - r["gt"]) for r in rows)
+        dataset_maes.append((name, mae))
+        print(
+            f"  {name:<34} {n:>3}  {avg_gt:>6.1f}  {avg_pred:>8.1f}  {mae:>6.2f}  {worst:>6}"
+        )
+
+    print(thin)
+    print(
+        f"  {'OVERALL':<34} {len(gt_results):>3}  {'':>6}  {'':>8}  {overall_mae:>6.2f}"
+    )
+    print(div)
+
+    # best / worst datasets
+    if dataset_maes:
+        best = min(dataset_maes, key=lambda x: x[1])
+        worst = max(dataset_maes, key=lambda x: x[1])
+        print(f"  Best  dataset: {best[0]}  (MAE {best[1]:.2f})")
+        print(f"  Worst dataset: {worst[0]}  (MAE {worst[1]:.2f})")
+    print(div + "\n")
 
 
 def main():
@@ -236,7 +286,8 @@ def main():
         mae = sum(abs(round(r["final"]) - r["gt"]) for r in gt_results) / len(
             gt_results
         )
-        print(f"MAE over {len(gt_results)} images: {mae:.4f}")
+        # print(f"MAE over {len(gt_results)} images: {mae:.4f}")
+        print_summary(results, model_path, data_path)
 
 
 if __name__ == "__main__":

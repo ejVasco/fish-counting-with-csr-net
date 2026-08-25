@@ -10,6 +10,60 @@ from torch.utils.data import Dataset
 from utils.density import gen_density_map
 
 
+def _add_shadow(image):
+    H, W, _ = image.shape
+
+    # pick random x positions for shadow "stripe"
+    x1 = random.randint(0, W)
+    x2 = random.randint(0, W)
+
+    # build polygon cut diagonally across img
+    pts = np.array(
+        [
+            [min(x1, x2), 0],
+            [max(x1, x2), 0],
+            [max(x1, x2) + random.randint(-W // 3, W // 3), H],
+            [max(x1, x2) + random.randint(-W // 3, W // 3), H],
+        ],
+        dtype=np.int32,
+    )
+
+    mask = np.zeros((H, W), dtype=np.float32)
+    cv2.fillPoly(mask, [pts], 1.0)
+
+    shadow_strength = random.uniform(0.3, 0.7)  # darkness value
+    image = image * (1 - mask[:, :, np.newaxis] * shadow_strength)
+    return np.clip(image, 0, 1).astype(np.float32)
+
+
+def _augment(image):
+    """
+    augmentations to use on float32 rgb image in [0,1] range
+    density map isn't affgected, only pixel values on the image
+    """
+    # -- brightness / contrast
+    if random.random() > 0.5:
+        brightness = random.uniform(-0.3, 0.3)
+        image = np.clip(image + brightness, 0, 1)
+
+    if random.random() > 0.5:
+        contrast = random.uniform(0.6, 1.4)
+        mean = image.mean()
+        image = np.clip((image - mean) * contrast + mean, 0, 1)
+
+    # -- gamma
+    if random.random() > 0.5:
+        gamma = random.uniform(0.6, 1.4)
+        image = np.power(image, gamma).astype(np.float32)
+
+    # -- synth shadows
+    # random dark polygons attempt to "teach " model that dark spot != fish
+    if random.random() > 0.4:
+        image = _add_shadow(image)
+
+    return image
+
+
 class FishDataset(Dataset):
     def __init__(
         self, datasets_dir=None, dataset_names=None, max_size=512, samples=None
@@ -82,6 +136,9 @@ class FishDataset(Dataset):
         new_H = int(H * scale)
         if scale != 1.0:
             image = cv2.resize(image, (new_W, new_H))
+
+        # augment to attempt compensation for shadows (via lighting changes and shadows changes)
+        image = _augment(image)
 
         mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
