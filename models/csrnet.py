@@ -21,8 +21,10 @@ class CSRNet(nn.Module):
         """
         super(CSRNet, self).__init__()
 
-        if activation not in ACTIVATIONS
-            raise ValueError(f"activation must be one of {ACTIVATIONS}, got {activation!r}")
+        if activation not in ACTIVATIONS:
+            raise ValueError(
+                f"activation must be one of {ACTIVATIONS}, got {activation!r}"
+            )
         self.activation = activation
 
         if load_pretrained:
