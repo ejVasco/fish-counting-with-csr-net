@@ -100,14 +100,10 @@ class FishDataset(Dataset):
                     annotations = json.load(j)
 
                 for image_name, points in annotations.items():
-                    if not image_name.endswith(
-                        ".jpg"
-                    ):  # all images in this are jpg
+                    if not image_name.endswith(".jpg"):  # all images in this are jpg
                         continue
                     image_path = os.path.join(images_dir, image_name)
-                    self.samples.append(
-                        {"image_path": image_path, "points": points}
-                )
+                    self.samples.append({"image_path": image_path, "points": points})
 
     def __len__(self):
         return len(self.samples)

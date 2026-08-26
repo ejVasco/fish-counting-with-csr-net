@@ -1,8 +1,10 @@
 # datasets/video2frames.py
 
-import sys
 import os
+import sys
+
 import cv2
+
 
 def extract_frames(video_path: str, num_frames: int):
     if not os.path.exists(video_path):
@@ -17,19 +19,23 @@ def extract_frames(video_path: str, num_frames: int):
     # prevent capturing more frames than is in video
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if num_frames > total_frames:
-        print(f"warn: requested frame count {num_frames}, when video only has {total_frames} frames")
+        print(
+            f"warn: requested frame count {num_frames}, when video only has {total_frames} frames"
+        )
         num_frames = total_frames
 
     # distribute the frames
     if num_frames == 1:
         indices = [total_frames // 2]
     else:
-        step = (total_frames -1 ) / (num_frames -1)
-        indices = [round (i*step) for i in range(num_frames)]
+        step = (total_frames - 1) / (num_frames - 1)
+        indices = [round(i * step) for i in range(num_frames)]
 
     # mk output foldher
     video_dir = os.path.dirname(os.path.abspath(video_path))
-    output_dir = os.path.join(video_dir,)
+    output_dir = os.path.join(
+        video_dir,
+    )
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"extracting {num_frames} frames from '{video_path}' into '{output_dir}'")
@@ -47,6 +53,7 @@ def extract_frames(video_path: str, num_frames: int):
 
     cap.release()
     print(f"done. {extracted} frames saved to {output_dir}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
