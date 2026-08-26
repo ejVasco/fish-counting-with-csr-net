@@ -146,7 +146,7 @@ def train_one_method(activation, train_loader, val_loader, device):
     for epoch in range(NUM_EPOCHS):
         # training
         model.train()
-        total_loss += loss.item()
+        total_loss = 0.0
 
         for imgs, gt in train_loader:
             imgs, gt = imgs.to(device), gt.to(device)
