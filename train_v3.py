@@ -151,7 +151,7 @@ def train_one_method(activation, train_loader, val_loader, device):
         for imgs, gt in train_loader:
             imgs, gt = imgs.to(device), gt.to(device)
 
-            pred= model(imgs)
+            pred = model(imgs)
 
             # combine density + count supervision
             density_loss = mse_loss(pred, gt)
@@ -164,7 +164,7 @@ def train_one_method(activation, train_loader, val_loader, device):
             torch.nn.utis.clip_grad_norm_(model.parameters(), 10.0)
             optimizer.step()
 
-            total_loss+s loss.item()
+            total_loss += loss.item()
 
         scheduler.step()
 
@@ -251,9 +251,11 @@ def main():
     with open(RESULTS_LOG, "w") as f:
         json.dump(results, f, indent=2)
 
-    print(f"\n{'='*60}\n training summary (by val MAE]\n{'='*60}")
+    print(f"\n{'=' * 60}\n training summary (by val MAE]\n{'=' * 60}")
     for r in sorted(results, key=lambda r: r["best_val_mae"]):
-        print(f"  {r['activation']:<10} val_mae={r['best_val_mae']:.4f} -> {r['checkpoint']}")
+        print(
+            f"  {r['activation']:<10} val_mae={r['best_val_mae']:.4f} -> {r['checkpoint']}"
+        )
     print(f"\nfull results saved to {RESULTS_LOG}")
     print(f"shared test set saved to {TEST_FILES_OUT}")
 
