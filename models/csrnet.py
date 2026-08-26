@@ -4,11 +4,26 @@ import torch.nn.functional as F
 import torchvision.models as models
 from torchvision.models import VGG16_Weights
 
+# choices for "activation" arg
+ACTIVATIONS = ("none", "relu", "softplus")
+
 
 # TODO: better comments
 class CSRNet(nn.Module):
-    def __init__(self, load_pretrained=True):
+    def __init__(self, load_pretrained=True, activation="softplus"):
+        """
+        args:
+            load_pretrained: use imagenet-pretrained vgg16 weights for the frontend
+            activation: how negative density values are handled at the output
+                "none" - no clamping
+                "relu" - F.relu(x)
+                "softplus" - F.softplus(x)
+        """
         super(CSRNet, self).__init__()
+
+        if activation not in ACTIVATIONS
+            raise ValueError(f"activation must be one of {ACTIVATIONS}, got {activation!r}")
+        self.activation = activation
 
         if load_pretrained:
             weights = VGG16_Weights.IMAGENET1K_V1
@@ -40,9 +55,11 @@ class CSRNet(nn.Module):
         x = self.frontend(x)
         x = self.backend(x)
 
-        # 2 methods of negative clamping, use one at a time
-        # ReLu
-        # x = F.relu(x)
-        # Softplus
-        x = F.softplus(x)
+        # negative value handling, chosen at init
+        if self.activation == "relu":
+            x = F.relu(x)
+        elif self.activation == "softplus":
+            x = F.softplus(x)
+        # else no negative clapming
+
         return x
