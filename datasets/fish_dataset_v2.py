@@ -90,24 +90,24 @@ class FishDataset(Dataset):
                 raise ValueError(
                     "'samples' or 'datasets_dir' & 'dataset_names' not provided"
                 )
-                self.samples = []
-                for dataset_name in dataset_names:
-                    dataset_path = os.path.join(datasets_dir, dataset_name)
-                    images_dir = os.path.join(dataset_path, "images")
-                    json_path = os.path.join(dataset_path, "annotations.json")
+            self.samples = []
+            for dataset_name in dataset_names:
+                dataset_path = os.path.join(datasets_dir, dataset_name)
+                images_dir = os.path.join(dataset_path, "images")
+                json_path = os.path.join(dataset_path, "annotations.json")
 
-                    with open(json_path, "r") as j:
-                        annotations = json.load(j)
+                with open(json_path, "r") as j:
+                    annotations = json.load(j)
 
-                    for image_name, points in annotations.items():
-                        if not image_name.endswith(
-                            ".jpg"
-                        ):  # all images in this are jpg
-                            continue
-                        image_path = os.path.join(images_dir, image_name)
-                        self.samples.append(
-                            {"image_path": image_path, "points": points}
-                        )
+                for image_name, points in annotations.items():
+                    if not image_name.endswith(
+                        ".jpg"
+                    ):  # all images in this are jpg
+                        continue
+                    image_path = os.path.join(images_dir, image_name)
+                    self.samples.append(
+                        {"image_path": image_path, "points": points}
+                )
 
     def __len__(self):
         return len(self.samples)
