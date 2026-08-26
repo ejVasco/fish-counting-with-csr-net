@@ -161,7 +161,7 @@ def train_one_method(activation, train_loader, val_loader, device):
 
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utis.clip_grad_norm_(model.parameters(), 10.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
             optimizer.step()
 
             total_loss += loss.item()
