@@ -34,6 +34,10 @@ NUM_EPOCHS = 25
 CHECKPOINT_DIR = "checkpoints"
 TEST_FILES_OUT = "test_data.txt"
 
+# METHODS to train and compare in CSRNET
+METHODS = ["none", "relu", "softplus"]
+RESULTS_LOG = "train_results.json"
+
 
 def pad_collate(batch):
     imgs, densities = zip(*batch)
@@ -113,6 +117,100 @@ def save_paths(samples, path):
         f.write("\n".join(s["image_path"] for s in samples))
 
 
+def train_one_method(activation, train_loader, val_loader, device):
+    """
+    trains a single csrnet with given final activation method for negative clamping
+    ("none", "relu", or "softplus") and saves best model for each method
+    returs small dict for comparison
+    """
+    print(f"\n{'=' * 60}\n    training method: {activation}\n{'=' * 60}")
+
+    checkpoint_path = os.path.join(CHECKPOINT_DIR, f"best_model_{activation}.pth")
+
+    model = CSRNet(load_pretrained=True, activation=activation).to(device)
+
+    mse_loss = nn.MSELoss()
+
+    # better learning balance (compared to previously) using adam optimizer
+    optimizer = torch.optim.Adam(
+        [
+            {"params": model.frontend.parameters(), "lr": 5e-6},
+            {"params": model.backend.parameters(), "lr": 2e-5},
+        ]
+    )
+
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.5)
+
+    best_mae = float("inf")
+
+    for epoch in range(NUM_EPOCHS):
+        # training
+        model.train()
+        total_loss += loss.item()
+
+        for imgs, gt in train_loader:
+            imgs, gt = imgs.to(device), gt.to(device)
+
+            pred= model(imgs)
+
+            # combine density + count supervision
+            density_loss = mse_loss(pred, gt)
+            count_loss = F.l1_loss(pred.sum(dim=[1, 2, 3]), gt.sum(dim=[1, 2, 3]))
+
+            loss = 0.8 * density_loss + 0.2 * count_loss
+
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utis.clip_grad_norm_(model.parameters(), 10.0)
+            optimizer.step()
+
+            total_loss+s loss.item()
+
+        scheduler.step()
+
+        avg_train_loss = total_loss / len(train_loader)
+        print(f"[{activation}][epoch {epoch + 1}] train loss: {avg_train_loss:.6f}")
+
+        # validation
+        model.eval()
+
+        total_abs_error = 0.0
+        count = 0
+
+        with torch.no_grad():
+            for imgs, gt_density in val_loader:
+                imgs = imgs.to(device)
+                gt_density = gt_density.to(device)
+
+                pred = model(imgs)
+
+                pred_count = pred.sum().item()
+                gt_count = gt_density.sum().item()
+
+                total_abs_error += abs(pred_count - gt_count)
+                count += 1
+
+        mae = total_abs_error / count
+
+        print(f"[{activation}] mean abs error: {mae:.4f}")
+
+        # checkpoint
+        if mae < best_mae:
+            best_mae = mae
+            # save activation alongside weights so test-v3.py knows how to rebuild the model correctly without having to remeber or guess
+            torch.save(
+                {"model_state_dict": model.state_dict(), "activation": activation},
+                checkpoint_path,
+            )
+            print(f"[{activation}] saved best model -> {checkpoint_path}")
+
+    return {
+        "activation": activation,
+        "best_val_mae": best_mae,
+        "checkpoint": checkpoint_path,
+    }
+
+
 def main():
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
@@ -145,77 +243,19 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("device:", device)
 
-    model = CSRNet(load_pretrained=True).to(device)
+    results = []
+    for activation in METHODS:
+        result = train_one_method(activation, train_loader, val_loader, device)
+        results.append(result)
 
-    mse_loss = nn.MSELoss()
+    with open(RESULTS_LOG, "w") as f:
+        json.dump(results, f, indent=2)
 
-    # better learning balance compared to previous scripts
-    optimizer = torch.optim.Adam(
-        [
-            {"params": model.frontend.parameters(), "lr": 5e-6},
-            {"params": model.backend.parameters(), "lr": 2e-5},
-        ]
-    )
-
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.5)
-
-    best_mae = float("inf")
-
-    for epoch in range(NUM_EPOCHS):
-        # ------------ train- ---------------
-        model.train()
-        total_loss = 0.0
-
-        for imgs, gt in train_loader:
-            imgs, gt = imgs.to(device), gt.to(device)
-
-            pred = model(imgs)
-
-            # combine density + count supervision
-            density_loss = mse_loss(pred, gt)
-            count_loss = F.l1_loss(pred.sum(dim=[1, 2, 3]), gt.sum(dim=[1, 2, 3]))
-
-            loss = 0.8 * density_loss + 0.2 * count_loss
-
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
-            optimizer.step()
-
-            total_loss += loss.item()
-
-        scheduler.step()
-
-        print(f"[epoch {epoch + 1}] train loss: {total_loss / len(train_loader):.6f}")
-
-        # ---------- validation ---------
-        model.eval()
-
-        total_abs_error = 0.0
-        count = 0
-
-        with torch.no_grad():
-            for imgs, gt_density in val_loader:
-                imgs = imgs.to(device)
-                gt_density = gt_density.to(device)
-
-                pred = model(imgs)
-
-                pred_count = pred.sum().item()
-                gt_count = gt_density.sum().item()
-
-                total_abs_error += abs(pred_count - gt_count)
-                count += 1
-
-        mae = total_abs_error / count
-
-        print(f"mean abs error: {mae:.4f}")
-
-        # ---------- chcekpoint -----------
-        if mae < best_mae:
-            best_mae = mae
-            torch.save(model.state_dict(), "best_model.pth")
-            print("saved best model")
+    print(f"\n{'='*60}\n training summary (by val MAE]\n{'='*60}")
+    for r in sorted(results, key=lambda r: r["best_val_mae"]):
+        print(f"  {r['activation']:<10} val_mae={r['best_val_mae']:.4f} -> {r['checkpoint']}")
+    print(f"\nfull results saved to {RESULTS_LOG}")
+    print(f"shared test set saved to {TEST_FILES_OUT}")
 
 
 if __name__ == "__main__":
