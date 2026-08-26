@@ -176,9 +176,8 @@ def main():
     if not positional:
         print(usage)
         return
-    model_path = positional[1] if len(positional) > 1 else "test_data.txt"
-    data_path = positional[0] if len(positional) > 0 else "best_model.pth"
-
+    data_path = positional[0] if len(positional) > 0 else "test_data.txt"
+    model_path = positional[1] if len(positional) > 1 else "best_model.pth"
     # ---------validate arguments ----------
     if not os.path.isfile(data_path) or not data_path.endswith(".txt"):
         print(f"Invalid datapath: {data_path}, ensure file exists and is .txt")
