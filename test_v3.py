@@ -42,14 +42,20 @@ def load_gt_count(img_path):
         return None
 
 
-def load_model(model_path, device):
-    model = CSRNet()
+def load_model(model_path, device, activation=None):
+    """
+    Loads csrnet checkpoint. if the checkpoint was saved with an "activition"/negative clamping method,
+    that's used. otherwise falls back to the activation arg (defailt softplus)
+    """
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
 
     # handles both checkpoints (raw state dict and { "model_state_dict " : ...})
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        ckpt_activation = checkpoint.get("activation", activation or "softplus")
+        model = CSRNet(activation=ckpt_activation)
         model.load_state_dict(checkpoint["model_state_dict"])
     else:
+        model = CSRNet(activation=activation or "softplus")
         model.load_state_dict(checkpoint)
 
     model.to(device)
@@ -98,6 +104,7 @@ def visualize(
 def print_summary(results, model_path, data_path):
     """
     Prints a professor-friendly summary grouped by dataset.
+    i'm so confused what i meant when i wrote "professor friendly"
     """
     gt_results = [r for r in results if r["gt"] is not None]
 
@@ -158,89 +165,41 @@ def print_summary(results, model_path, data_path):
     print(div + "\n")
 
 
-def main():
-    usage = "Usage:\ntemp"
+# default checkpoints that were written by train_v3.py
+COMPARE_METHODS = ["none", "relu", "softplus"]
+COMPARE_CHECKPOINT_DIR = "checkpoints"
 
-    # ---- arguments ------------
-    # "--save" , "--headless" , "[modelpath].pth" , "[testdata].txt"
-    # todo: add these args and defaults to usage later
-    args = sys.argv[1:]
-    if any(h in args for h in ["--h", "--help"]):
-        print(usage)
-        return
-    save = "--save" in args
-    headless = "--headless" in args
-    clamp = False  # not "--no-clamp" in args  # basically whether to throw out negative results
 
-    positional = [a for a in args if not a.startswith("--")]
-    if not positional:
-        print(usage)
-        return
-    data_path = positional[0] if len(positional) > 0 else "test_data.txt"
-    model_path = positional[1] if len(positional) > 1 else "best_model.pth"
-    # ---------validate arguments ----------
-    if not os.path.isfile(data_path) or not data_path.endswith(".txt"):
-        print(f"Invalid datapath: {data_path}, ensure file exists and is .txt")
-        print(usage)
-        return
-    if not os.path.isfile(model_path) or not model_path.endswith(".pth"):
-        print(f"Invalid modelpath: {model_path}, ensure file exists and is .pth")
-        print(usage)
-        return
-    # print(f"PATHS:\n  data_path = {data_path}\n  model_path = {model_path}")
-
-    # ---------- reading test data ----------_ -
+def load_test_paths(data_path):
+    """Reads img paths from a txt file and filters out any that are missing"""
     with open(data_path) as f:
         img_paths = [line.strip() for line in f if line.strip()]
 
-    # validate files exist
-    missing_img_files = [
-        p for p in img_paths if not os.path.isfile(p)
-    ]  # array of missing files
-
+    missing_img_files = [p for p in img_paths if not os.path.isfile(p)]
     if missing_img_files:
         print(f"Warning: {len(missing_img_files)} files in {data_path} not found:")
         for m in missing_img_files:
             print(f"    -> {m}")
+        img_paths = [p for p in img_paths if os.path.isfile(p)]
+    return img_paths
 
-        img_paths = [
-            p for p in img_paths if os.path.isfile(p)
-        ]  # only keep existing files
 
-    if not img_paths:
-        print(f"error: no paths found in {data_path}]")
-        return
-
-    # ------------- device and model ---------
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    print(
-        "------------------------------------------\n"
-        "Full summary before running testing\n"
-        f"  model    : {model_path}\n"
-        f"  data     : {data_path}\n"
-        f"  device   : {device}\n"
-        f"  clamp    : {clamp}\n"
-        f"  save     : {save}\n"
-        f"  headless : {headless}\n"
-        "-------------------------------------------\n"
-    )
-
+def run_model_test(model_path, img_paths, device, clamp, save, headless, quiet=False):
+    """
+    Runs a single model against a list of image paths.
+    Returns (results, overall_mae) where results is a list of per image dicts
+    quiet=true suppresses that per image print lines
+    """
     model = load_model(model_path, device)
 
-    # ------------- batch testing --------------
     results = []
     total = len(img_paths)
 
-    for (
-        i,
-        img_path,
-    ) in enumerate(img_paths, 1):
+    for i, img_path in enumerate(img_paths, 1):
         try:
             raw, final, density, og_img = predict(model, img_path, device, clamp=clamp)
         except Exception as e:
-            print(f"    error predicting {img_path} ({e})")
-            continue
+            print(f"        error predicting {img_path} ({e})")
 
         gt_count = load_gt_count(img_path)
         gt_str = f"{gt_count}" if gt_count is not None else "N/A"
@@ -248,12 +207,12 @@ def main():
             f"{abs(round(final) - gt_count):+d}" if gt_count is not None else "N/A"
         )
 
-        flag = " <- negative" if raw < 0 else ""
-        print(
-            f"[{i:>2}/{total}] raw: {raw:>+8.2f}\n"
-            f"  clamped: {final:>6.1f}  rounded: {round(final):>4}  gt: {gt_str:>4}  error: {error_str}\n"
-            f"  {img_path}\n"
-        )
+        if not quiet:
+            print(
+                f"[{i:>2}/{total}] raw: {raw:>+8.2f}\n"
+                f"  clamped: {final:>6.1f}  rounded: {round(final):>4}  gt: {gt_str:>4}  error: {error_str}\n"
+                f"  {img_path}\n"
+            )
 
         results.append(
             {
@@ -267,7 +226,7 @@ def main():
 
         save_path = None
         if save:
-            pass  # TODO: savinhg
+            pass  # possibly save to a file
 
         if not headless or save:
             visualize(
@@ -281,11 +240,124 @@ def main():
             )
 
     gt_results = [r for r in results if r["gt"] is not None]
-    if gt_results:
-        mae = sum(abs(round(r["final"]) - r["gt"]) for r in gt_results) / len(
-            gt_results
+    mae = (
+        sum(abs(round(r["final"]) - r["gt"]) for r in gt_results) / len(gt_results)
+        if gt_results
+        else float("nan")
+    )
+    return results, mae
+
+
+def print_comparison(all_results):
+    """
+    all_results: list of {"activation": str, "checkpoint": str, "results": [...], "mae": float}
+    prits a compact side by side of all 3 methods
+    """
+    W = 60
+    div = "=" * W
+    print(f"\n{div}\n  METHOD COMPARISON (overall MAE, lower is better)\n{div}")
+    for r in sorted(all_results, key=lambda r: r["mae"]):
+        print(f"  {r['activation']:<10} MAE={r['mae']:.4f}   ({r['checkpoint']}")
+    print(div + "\n")
+
+
+def main():
+    usage = (
+        "Usage:\n"
+        "  python -m test_v3 [data.txt] [model.pth] [--save] [--headless]\n"
+        "  python -m test_v3 [data.txt] --compare [--save] [--headless]\n"
+        "    --compare tests checkpoints/best_model_{none,relu,softplus}.pth\n"
+        "              against the same data file and prints a comparison table\n"
+    )
+
+    # ---- arguments ------------
+    args = sys.argv[1:]
+    if any(h in args for h in ["--h", "--help"]):
+        print(usage)
+        return
+    save = "--save" in args
+    headless = "--headless" in args
+    compare = "--compare" in args
+    clamp = False  # not "--no-clamp" in args  # basically whether to throw out negative results
+
+    positional = [a for a in args if not a.startswith("--")]
+    if not positional:
+        print(usage)
+
+    data_path = positional[0] if len(positional) > 0 else "test_data.txt"
+
+    # ---------validate arguments ----------
+    if not os.path.isfile(data_path) or not data_path.endswith(".txt"):
+        print(f"Invalid datapath: {data_path}, ensure file exists and is .txt")
+        print(usage)
+        return
+
+    img_paths = load_test_paths(data_path)
+
+    if not img_paths:
+        print(f"error: no paths found in {data_path}")
+        return
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # ------- compare mode: test all 3 ---
+    if compare:
+        print(
+            "------------------\n"
+            "Comparing all methods (none / relu / softplus)\n"
+            f"  data    : {data_path}\n"
+            f"  device  : {device}\n"
+            f"  clamp   : {clamp}\n"
+            "--------------------\n"
         )
-        # print(f"MAE over {len(gt_results)} images: {mae:.4f}")
+
+        all_results = []
+        for activation in COMPARE_METHODS:
+            model_path = os.path.join(
+                COMPARE_CHECKPOINT_DIR, f"best_model_{activation}.pth"
+            )
+            if not os.path.isfile(model_path):
+                print(f"skipping {activation}: checkpoint not found at {model_path}")
+                continue
+
+            print(f"\n----- testing method: {activation} -----")
+            results, mae = run_model_test(
+                model_path, img_paths, device, clamp, save, headless, quiet=True
+            )
+            print_summary(results, model_path, data_path)
+            all_results.append(
+                {
+                    "activation": activation,
+                    "checkpoint": model_path,
+                    "results": results,
+                    "mae": mae,
+                }
+            )
+
+        if all_results:
+            print_comparison(all_results)
+        return
+
+    # ------ single model mode ----
+    model_path = positional[1] if len(positional) > 3 else "best_model.pth"
+    if not os.path.isfile(model_path) or not model_path.endswith(".pth"):
+        print(f"invalid modelpath: {model_path}, ensure file exists and is .pth")
+        print(usage)
+        return
+
+    print(
+        "---------\n"
+        "full summary before running testing\n"
+        f"  model     : {model_path}\n"
+        f"  data      : {data_path}\n"
+        f"  device    : {device}\n"
+        f"  clamp     : {save}\n"
+        f"  headless  : {headless}\n"
+        "---------\n"
+    )
+
+    results, mae = run_model_test(model_path, img_paths, device, clamp, save, headless)
+    if any(r["gt"] is not None for r in results):
         print_summary(results, model_path, data_path)
 
 
