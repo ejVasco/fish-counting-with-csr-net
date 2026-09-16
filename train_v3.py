@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 from datasets.fish_dataset_v2 import FishDataset
 from models.csrnet import CSRNet
+from utils.tank_mask import compute_dataset_circle, fractional_to_mask
 
 DATA_ROOT = "datasets"
 
@@ -28,7 +29,8 @@ ALL_DATASETS = [
 TRAIN_RATIO = 0.70
 VAL_RATIO = 0.15
 
-RNG_SEED = 71
+# RNG_SEED = 71
+RNG_SEED = 32
 BATCH_SIZE = 4
 NUM_EPOCHS = 25
 CHECKPOINT_DIR = "checkpoints"
@@ -37,6 +39,46 @@ TEST_FILES_OUT = "test_data.txt"
 # METHODS to train and compare in CSRNET
 METHODS = ["none", "relu", "softplus"]
 RESULTS_LOG = "train_results.json"
+
+
+class MaskedFishDataset(FishDataset):
+    """
+    wraps fish dataset, while adding tank mask
+    """
+
+    def __init__(self, base_dataset, dataset_circles):
+        self.base = base_dataset
+        self.dataset_circles = dataset_circles
+
+    def __len__(self):
+        return len(self.base)
+
+    def __getitem__(self, idx):
+        img, density = self.base[idx]
+
+        img_path = self.base.samples[idx]["image_path"]
+        dataset_name = os.path.normpath(img_path).split(os.sep)[1]
+        frac_circle = self.dataset_circles.get(dataset_name)
+
+        mask = fractional_to_mask(frac_circle, density.shape[-2:])
+        mask = torch.from_numpy(mask).unsqueeze(0).float()
+
+        return img, density, mask
+
+
+def build_dataset_circles(dataset_root, gathered_samples):
+    """
+    deect one circle per dataset from a few frames
+    """
+    circles = {}
+    for name, samples in gathered_samples.items():
+        images_dir = os.path.join(dataset_root, name, "images")
+        filenames = [os.path.basename(s["image_path"]) for s in samples]
+        circle = compute_dataset_circle(images_dir, filenames)
+        if circle is None:
+            print(f"warn: no tank circle detected for {name}, no masking")
+        circles[name] = circle
+    return circles
 
 
 def pad_collate(batch):
@@ -218,6 +260,9 @@ def main():
     gathered = gather_samples(DATA_ROOT, ALL_DATASETS)
     print("total:", sum(len(v) for v in gathered.values()))
 
+    print("detecting tank mask per dataset")
+    dataset_circles = build_dataset_circles(DATA_ROOT, gathered)
+
     train_s, val_s, test_s = split_samples(
         gathered, TRAIN_RATIO, VAL_RATIO, seed=RNG_SEED
     )
@@ -226,8 +271,12 @@ def main():
     save_paths(train_s, "train_data.txt")
     save_paths(val_s, "val_data.txt")
 
-    train_ds = FishDataset(samples=train_s)
-    val_ds = FishDataset(samples=val_s)
+    train_ds = MaskedFishDataset(
+        FishDataset(samples=train_s), dataset_circles=dataset_circles
+    )
+    val_ds = MaskedFishDataset(
+        FishDataset(samples=val_s), dataset_circles=dataset_circles
+    )
 
     train_loader = DataLoader(
         train_ds,
