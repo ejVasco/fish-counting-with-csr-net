@@ -13,15 +13,14 @@ from torchvision import transforms
 from models.csrnet import CSRNet
 
 
-def load_gt_count(img_path):
+def load_gt_points(img_path):
     """
-    looks up ground truth fish count for image by reading corresponding annotations.json
+    looks up ground truth (x,y) points for image by reading corresponding annotations.json
 
     expects paths in form: ./datasets/<dataset_name>/images/<img>.jpg
-    returns the point count as an int or None if the annotation can't be found
+    returns a list of (x,y) tuples or None if the annotation can't be found
     """
-    # walk up 2 levels:
-    # Walk up two levels:  images/ -> dataset_dir -> find annotations.json
+    # walk up 2 levels to find annotations.json
     images_dir = os.path.dirname(img_path)
     dataset_dir = os.path.dirname(images_dir)
     json_path = os.path.join(dataset_dir, "annotations.json")
@@ -34,12 +33,20 @@ def load_gt_count(img_path):
     try:
         with open(json_path, "r") as f:
             annotations = json.load(f)
-        points = annotations.get(img_name)
-        if points is None:
-            return None
-        return len(points)
+        return annotations.get(img_name)
     except Exception:
         return None
+
+
+def load_gt_count(img_path):
+    """
+    looks up ground truth fish count for image by reading corresponding annotations.json
+    returns the count as an int or None if the annotation can't be found
+    """
+    points = load_gt_points(img_path)
+    if points is None:
+        return None
+    return len(points)
 
 
 def load_model(model_path, device, activation=None):
