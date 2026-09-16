@@ -35,11 +35,11 @@ class Browser:
         plt.show()
 
     def on_key(self, event):
-        if event.key in ("right", "n", "space"):
-            self.idx = max(self.idx + 1, len(self.paths) - 1)
+        if event.key in ("right", "n", " "):
+            self.idx = min(self.idx + 1, len(self.paths) - 1)
             self.show(self.idx)
         elif event.key in ("left", "p"):
-            self.idx = min(self.idx - 1, 0)
+            self.idx = max(self.idx - 1, 0)
             self.show(self.idx)
         elif event.key in ("q", "escape"):
             plt.close()
@@ -53,7 +53,7 @@ class Browser:
         )  # _ is raw count but i don't use it
 
         img_np = np.array(img)
-        H, W = img_np.shape
+        H, W, _ = img_np.shape
 
         gt_points = load_gt_points(img_path)
 
@@ -68,7 +68,7 @@ class Browser:
         self.axes[1].set_title(f"Predicted Density\n(count: {pred_count:.1f})")
 
         if gt_points is not None:
-            gt_density = gen_density_map(gt_points, H, W)
+            gt_density = gen_density_map((H, W), gt_points, sigma=4)
             self.axes[2].imshow(gt_density, cmap="jet")
             self.axes[2].set_title(
                 f"Ground Truth Density\n(count: {len(gt_points):.1f})"
