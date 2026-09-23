@@ -11,6 +11,38 @@ from matplotlib import pyplot as plt
 from torchvision import transforms
 
 from models.csrnet import CSRNet
+from utils.tank_mask import (
+    circle_to_fractional,
+    compute_dataset_circle,
+    detect_tank_circle,
+    fractional_to_mask,
+)
+
+_MASK_CIRCLE_CACHE = {}
+
+
+def _get_mask_for(img, img_path, shape, use_dataset_calibration):
+    """
+    build tank mask for prediction
+    optional flag for using dataset calibration, set to true to use dataset calibration and save time for known datasets
+    """
+    if use_dataset_calibration:
+        images_dir = os.path.dirname(img_path)
+        dataset_dir = os.path.dirname(images_dir)
+        if dataset_dir not in _MASK_CIRCLE_CACHE:
+            filenames = sorted(f for f in os.listdir(images_dir) if f.endswith(".jpg"))
+            _MASK_CIRCLE_CACHE[dataset_dir] = compute_dataset_circle(
+                images_dir, filenames
+            )
+        frac_circle = _MASK_CIRCLE_CACHE[dataset_dir]
+        return fractional_to_mask(frac_circle, shape)
+
+    img_bgr = np.array(img)[:, :, ::-1].copy()
+    circle = detect_tank_circle(img_bgr)
+    frac_circle = (
+        circle_to_fractional(circle, img_bgr.shape[:2]) if circle is not None else None
+    )
+    return fractional_to_mask(frac_circle, shape)
 
 
 def load_gt_points(img_path):
@@ -81,7 +113,9 @@ TRANSFORM = transforms.Compose(
 )
 
 
-def predict(model, img_path, device, clamp=True):
+def predict(
+    model, img_path, device, clamp=True, apply_mask=True, use_dataset_calibration=False
+):
     img = Image.open(img_path).convert("RGB")
     tensor = TRANSFORM(img).unsqueeze(0).to(device)
 
@@ -94,6 +128,11 @@ def predict(model, img_path, device, clamp=True):
         output = output.clamp(min=0)
 
     density = output.squeeze().cpu().numpy()
+
+    if apply_mask:
+        mask = _get_mask_for(img, img_path, density.shape, use_dataset_calibration)
+        density *= mask
+
     final_count = float(density.sum())
 
     return raw_count, final_count, density, img

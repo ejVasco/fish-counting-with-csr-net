@@ -82,15 +82,16 @@ def build_dataset_circles(dataset_root, gathered_samples):
 
 
 def pad_collate(batch):
-    imgs, densities = zip(*batch)
+    imgs, densities, masks = zip(*batch)
 
     max_H = max(img.shape[1] for img in imgs)
     max_W = max(img.shape[2] for img in imgs)
 
     padded_imgs = []
     padded_densities = []
+    padded_masks = []
 
-    for img, density in zip(imgs, densities):
+    for img, density, mask in zip(imgs, densities, masks):
         pad_H = max_H - img.shape[1]
         pad_W = max_W - img.shape[2]
         padded_imgs.append(F.pad(img, (0, pad_W, 0, pad_H)))
@@ -98,8 +99,13 @@ def pad_collate(batch):
         den_pad_H = (max_H // 8) - density.shape[1]
         den_pad_W = (max_W // 8) - density.shape[2]
         padded_densities.append(F.pad(density, (0, den_pad_W, 0, den_pad_H)))
+        padded_masks.append(F.pad(mask, (0, den_pad_W, 0, den_pad_H)))
 
-    return torch.stack(padded_imgs), torch.stack(padded_densities)
+    return (
+        torch.stack(padded_imgs),
+        torch.stack(padded_densities),
+        torch.stack(padded_masks),
+    )
 
 
 def gather_samples(dataset_root: str, dataset_names: list[str]):
@@ -190,10 +196,14 @@ def train_one_method(activation, train_loader, val_loader, device):
         model.train()
         total_loss = 0.0
 
-        for imgs, gt in train_loader:
-            imgs, gt = imgs.to(device), gt.to(device)
+        for imgs, gt, masks in train_loader:
+            imgs, gt, masks = imgs.to(device), gt.to(device), masks.to(device)
 
             pred = model(imgs)
+
+            # mask both pred and gt to tank interior before loss sees them so model loses anything gained by predicting outside the tank
+            pred = pred * masks
+            gt = gt * masks
 
             # combine density + count supervision
             density_loss = mse_loss(pred, gt)
@@ -220,11 +230,16 @@ def train_one_method(activation, train_loader, val_loader, device):
         count = 0
 
         with torch.no_grad():
-            for imgs, gt_density in val_loader:
+            for imgs, gt_density, masks in val_loader:
                 imgs = imgs.to(device)
                 gt_density = gt_density.to(device)
+                masks = masks.to(device)
 
                 pred = model(imgs)
+
+                # restrict to only the masks
+                pred = pred * masks
+                gt_density = gt_density * masks
 
                 pred_count = pred.sum().item()
                 gt_count = gt_density.sum().item()
