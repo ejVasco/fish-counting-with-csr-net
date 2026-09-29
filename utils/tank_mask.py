@@ -6,9 +6,6 @@ import os
 
 import cv2
 import numpy as np
-from sympy.printing.codeprinter import cxxcode
-
-from utils.test_density import img
 
 
 def detect_tank_circle(img_bgr, min_frac=0.25, max_frac=0.55):
@@ -20,7 +17,7 @@ def detect_tank_circle(img_bgr, min_frac=0.25, max_frac=0.55):
         min_frac/max_frac: expected tank radious as fraction of image min(image width, image height) may have to tune later
     """
 
-    H, W, _ = img_bgr.shape[:2]
+    H, W = img_bgr.shape[:2]
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     gray = cv2.medianBlur(gray, 9)
 
