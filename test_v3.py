@@ -103,7 +103,7 @@ def load_model(model_path, device, activation=None):
     return model
 
 
-MAX_SIZE = 256
+MAX_SIZE = 512  # must match FishDataset max_size used in training
 
 
 def resize_like_training(img):
@@ -263,6 +263,7 @@ def run_model_test(model_path, img_paths, device, clamp, save, headless, quiet=F
             raw, final, density, og_img = predict(model, img_path, device, clamp=clamp)
         except Exception as e:
             print(f"        error predicting {img_path} ({e})")
+            continue
 
         gt_count = load_gt_count(img_path)
         gt_str = f"{gt_count}" if gt_count is not None else "N/A"
@@ -402,7 +403,7 @@ def main():
         return
 
     # ------ single model mode ----
-    model_path = positional[1] if len(positional) > 3 else "best_model.pth"
+    model_path = positional[1] if len(positional) > 1 else "best_model.pth"
     if not os.path.isfile(model_path) or not model_path.endswith(".pth"):
         print(f"invalid modelpath: {model_path}, ensure file exists and is .pth")
         print(usage)
@@ -414,7 +415,8 @@ def main():
         f"  model     : {model_path}\n"
         f"  data      : {data_path}\n"
         f"  device    : {device}\n"
-        f"  clamp     : {save}\n"
+        f"  clamp     : {clamp}\n"
+        f"  save      : {save}\n"
         f"  headless  : {headless}\n"
         "---------\n"
     )
