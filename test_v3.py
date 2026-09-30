@@ -3,6 +3,7 @@ import json
 import os
 import sys
 
+import cv2
 import numpy as np
 import PIL.Image as Image
 import torch
@@ -102,6 +103,22 @@ def load_model(model_path, device, activation=None):
     return model
 
 
+MAX_SIZE = 256
+
+
+def resize_like_training(img):
+    """
+    Resizes the image to so longest side is MAX_SIZE
+    """
+    W, H = img.size
+    scale = min(MAX_SIZE / W, MAX_SIZE / H, 1.0)
+    if scale == 1.0:
+        return img
+    new_W, new_H = int(W * scale), int(H * scale)
+    resized = cv2.resize(np.array(img), (new_W, new_H))
+    return Image.fromarray(resized)
+
+
 TRANSFORM = transforms.Compose(
     [
         transforms.ToTensor(),
@@ -117,7 +134,7 @@ def predict(
     model, img_path, device, clamp=True, apply_mask=True, use_dataset_calibration=False
 ):
     img = Image.open(img_path).convert("RGB")
-    tensor = TRANSFORM(img).unsqueeze(0).to(device)
+    tensor = TRANSFORM(resize_like_training(img)).unsqueeze(0).to(device)
 
     with torch.no_grad():
         output = model(tensor)
