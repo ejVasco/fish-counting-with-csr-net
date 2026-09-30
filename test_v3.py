@@ -13,37 +13,44 @@ from torchvision import transforms
 
 from models.csrnet import CSRNet
 from utils.tank_mask import (
+    build_mask,
     circle_to_fractional,
     compute_dataset_circle,
     detect_tank_circle,
-    fractional_to_mask,
+    load_manual_masks,
 )
 
 _MASK_CIRCLE_CACHE = {}
+_MANUAL_MASKS = load_manual_masks()
 
 
 def _get_mask_for(img, img_path, shape, use_dataset_calibration):
     """
-    build tank mask for prediction
+    build tank mask for prediction: traced outline if the image's dataset has one (no hough needed),
+    else hough circle; minus any manual exclusions (pipe)
     optional flag for using dataset calibration, set to true to use dataset calibration and save time for known datasets
     """
+    images_dir = os.path.dirname(img_path)
+    dataset_dir = os.path.dirname(images_dir)
+    manual = _MANUAL_MASKS.get(os.path.basename(dataset_dir))
+
+    if manual and manual["tank"]:
+        return build_mask(None, shape, manual)
+
     if use_dataset_calibration:
-        images_dir = os.path.dirname(img_path)
-        dataset_dir = os.path.dirname(images_dir)
         if dataset_dir not in _MASK_CIRCLE_CACHE:
             filenames = sorted(f for f in os.listdir(images_dir) if f.endswith(".jpg"))
             _MASK_CIRCLE_CACHE[dataset_dir] = compute_dataset_circle(
                 images_dir, filenames
             )
-        frac_circle = _MASK_CIRCLE_CACHE[dataset_dir]
-        return fractional_to_mask(frac_circle, shape)
+        return build_mask(_MASK_CIRCLE_CACHE[dataset_dir], shape, manual)
 
     img_bgr = np.array(img)[:, :, ::-1].copy()
     circle = detect_tank_circle(img_bgr)
     frac_circle = (
         circle_to_fractional(circle, img_bgr.shape[:2]) if circle is not None else None
     )
-    return fractional_to_mask(frac_circle, shape)
+    return build_mask(frac_circle, shape, manual)
 
 
 def load_gt_points(img_path):
