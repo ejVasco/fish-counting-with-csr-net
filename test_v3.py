@@ -168,13 +168,31 @@ def visualize(
     pass
 
 
-# to do: rewrite print summary
+def compute_metrics(rows):
+    """
+    count metrics over results with ground truth, using rounded predictions
+      mae  - mean absolute error, in fish
+      rmse - root mean squared error, in fish (penalizes large misses more)
+      mape - mean absolute percentage error over images with gt > 0 (percent of the true count)
+    """
+    rows = [r for r in rows if r["gt"] is not None]
+    if not rows:
+        nan = float("nan")
+        return {"n": 0, "mae": nan, "rmse": nan, "mape": nan, "worst": 0}
+    errs = [abs(round(r["final"]) - r["gt"]) for r in rows]
+    pct = [e / r["gt"] * 100 for e, r in zip(errs, rows) if r["gt"] > 0]
+    return {
+        "n": len(rows),
+        "mae": sum(errs) / len(errs),
+        "rmse": (sum(e * e for e in errs) / len(errs)) ** 0.5,
+        "mape": sum(pct) / len(pct) if pct else float("nan"),
+        "worst": max(errs),
+    }
 
 
 def print_summary(results, model_path, data_path):
     """
-    Prints a professor-friendly summary grouped by dataset.
-    i'm so confused what i meant when i wrote "professor friendly"
+    Prints a summary table grouped by dataset
     """
     gt_results = [r for r in results if r["gt"] is not None]
 
@@ -185,13 +203,7 @@ def print_summary(results, model_path, data_path):
         dataset_name = os.path.basename(os.path.dirname(os.path.dirname(r["path"])))
         datasets.setdefault(dataset_name, []).append(r)
 
-    overall_mae = (
-        sum(abs(round(r["final"]) - r["gt"]) for r in gt_results) / len(gt_results)
-        if gt_results
-        else float("nan")
-    )
-
-    W = 74
+    W = 84
     div = "=" * W
     thin = "-" * W
 
@@ -204,34 +216,35 @@ def print_summary(results, model_path, data_path):
     print(div)
 
     # per-dataset table
-    col = f"  {'Dataset':<34} {'N':>3}  {'Avg GT':>6}  {'Avg Pred':>8}  {'MAE':>6}  {'Worst':>6}"
+    col = f"  {'Dataset':<30} {'N':>3}  {'Avg GT':>6}  {'Avg Pred':>8}  {'MAE':>6}  {'RMSE':>6}  {'MAPE':>6}  {'Worst':>5}"
     print(col)
     print(thin)
 
-    dataset_maes = []
+    dataset_metrics = []
     for name, rows in sorted(datasets.items()):
-        n = len(rows)
-        avg_gt = sum(r["gt"] for r in rows) / n
-        avg_pred = sum(round(r["final"]) for r in rows) / n
-        mae = sum(abs(round(r["final"]) - r["gt"]) for r in rows) / n
-        worst = max(abs(round(r["final"]) - r["gt"]) for r in rows)
-        dataset_maes.append((name, mae))
+        m = compute_metrics(rows)
+        avg_gt = sum(r["gt"] for r in rows) / m["n"]
+        avg_pred = sum(round(r["final"]) for r in rows) / m["n"]
+        dataset_metrics.append((name, m))
         print(
-            f"  {name:<34} {n:>3}  {avg_gt:>6.1f}  {avg_pred:>8.1f}  {mae:>6.2f}  {worst:>6}"
+            f"  {name:<30} {m['n']:>3}  {avg_gt:>6.1f}  {avg_pred:>8.1f}  {m['mae']:>6.2f}  {m['rmse']:>6.2f}  {m['mape']:>5.1f}%  {m['worst']:>5}"
         )
 
+    overall = compute_metrics(gt_results)
     print(thin)
     print(
-        f"  {'OVERALL':<34} {len(gt_results):>3}  {'':>6}  {'':>8}  {overall_mae:>6.2f}"
+        f"  {'OVERALL':<30} {overall['n']:>3}  {'':>6}  {'':>8}  {overall['mae']:>6.2f}  {overall['rmse']:>6.2f}  {overall['mape']:>5.1f}%  {overall['worst']:>5}"
     )
     print(div)
+    print("  MAE/RMSE in fish; MAPE = mean |error| / true count per image (gt > 0 only)")
 
-    # best / worst datasets
-    if dataset_maes:
-        best = min(dataset_maes, key=lambda x: x[1])
-        worst = max(dataset_maes, key=lambda x: x[1])
-        print(f"  Best  dataset: {best[0]}  (MAE {best[1]:.2f})")
-        print(f"  Worst dataset: {worst[0]}  (MAE {worst[1]:.2f})")
+    # best / worst datasets, by percent error so large and small tanks compare fairly
+    ranked = [(n, m) for n, m in dataset_metrics if m["mape"] == m["mape"]]
+    if ranked:
+        best = min(ranked, key=lambda x: x[1]["mape"])
+        worst = max(ranked, key=lambda x: x[1]["mape"])
+        print(f"  Best  dataset: {best[0]}  (MAPE {best[1]['mape']:.1f}%, MAE {best[1]['mae']:.2f})")
+        print(f"  Worst dataset: {worst[0]}  (MAPE {worst[1]['mape']:.1f}%, MAE {worst[1]['mae']:.2f})")
     print(div + "\n")
 
 
@@ -257,7 +270,7 @@ def load_test_paths(data_path):
 def run_model_test(model_path, img_paths, device, clamp, save, headless, quiet=False):
     """
     Runs a single model against a list of image paths.
-    Returns (results, overall_mae) where results is a list of per image dicts
+    Returns (results, metrics) where results is a list of per image dicts and metrics is from compute_metrics
     quiet=true suppresses that per image print lines
     """
     model = load_model(model_path, device)
@@ -310,25 +323,22 @@ def run_model_test(model_path, img_paths, device, clamp, save, headless, quiet=F
                 save_path=save_path,
             )
 
-    gt_results = [r for r in results if r["gt"] is not None]
-    mae = (
-        sum(abs(round(r["final"]) - r["gt"]) for r in gt_results) / len(gt_results)
-        if gt_results
-        else float("nan")
-    )
-    return results, mae
+    return results, compute_metrics(results)
 
 
 def print_comparison(all_results):
     """
-    all_results: list of {"activation": str, "checkpoint": str, "results": [...], "mae": float}
+    all_results: list of {"activation": str, "checkpoint": str, "results": [...], "metrics": dict}
     prits a compact side by side of all 3 methods
     """
-    W = 60
+    W = 72
     div = "=" * W
-    print(f"\n{div}\n  METHOD COMPARISON (overall MAE, lower is better)\n{div}")
-    for r in sorted(all_results, key=lambda r: r["mae"]):
-        print(f"  {r['activation']:<10} MAE={r['mae']:.4f}   ({r['checkpoint']}")
+    print(f"\n{div}\n  METHOD COMPARISON (overall, lower is better)\n{div}")
+    for r in sorted(all_results, key=lambda r: r["metrics"]["mae"]):
+        m = r["metrics"]
+        print(
+            f"  {r['activation']:<10} MAE={m['mae']:.3f}  RMSE={m['rmse']:.3f}  MAPE={m['mape']:.1f}%   ({r['checkpoint']})"
+        )
     print(div + "\n")
 
 
@@ -392,7 +402,7 @@ def main():
                 continue
 
             print(f"\n----- testing method: {activation} -----")
-            results, mae = run_model_test(
+            results, metrics = run_model_test(
                 model_path, img_paths, device, clamp, save, headless, quiet=True
             )
             print_summary(results, model_path, data_path)
@@ -401,7 +411,7 @@ def main():
                     "activation": activation,
                     "checkpoint": model_path,
                     "results": results,
-                    "mae": mae,
+                    "metrics": metrics,
                 }
             )
 
@@ -428,7 +438,7 @@ def main():
         "---------\n"
     )
 
-    results, mae = run_model_test(model_path, img_paths, device, clamp, save, headless)
+    results, _ = run_model_test(model_path, img_paths, device, clamp, save, headless)
     if any(r["gt"] is not None for r in results):
         print_summary(results, model_path, data_path)
 
