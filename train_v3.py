@@ -1,4 +1,5 @@
 # train_v3.py
+import argparse
 import json
 import os
 import random
@@ -40,6 +41,8 @@ TEST_FILES_OUT = "test_data.txt"
 
 # METHODS to train and compare in CSRNET
 METHODS = ["none", "relu", "softplus"]
+# seeds model init, batch order and augmentation per method (split is seeded separately by RNG_SEED)
+TRAIN_SEED = 0
 RESULTS_LOG = "train_results.json"
 
 
@@ -179,13 +182,21 @@ def save_paths(samples, path):
         f.write("\n".join(s["image_path"] for s in samples))
 
 
-def train_one_method(activation, train_loader, val_loader, device):
+def seed_everything(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def train_one_method(activation, train_loader, val_loader, device, seed=TRAIN_SEED):
     """
     trains a single csrnet with given final activation method for negative clamping
     ("none", "relu", or "softplus") and saves best model for each method
     returs small dict for comparison
     """
-    print(f"\n{'=' * 60}\n    training method: {activation}\n{'=' * 60}")
+    print(f"\n{'=' * 60}\n    training method: {activation} (seed {seed})\n{'=' * 60}")
+    # seeded per method so a method's run doesn't depend on which methods ran before it
+    seed_everything(seed)
 
     checkpoint_path = os.path.join(CHECKPOINT_DIR, f"best_model_{activation}.pth")
 
@@ -270,7 +281,11 @@ def train_one_method(activation, train_loader, val_loader, device):
             best_mae = mae
             # save activation alongside weights so test-v3.py knows how to rebuild the model correctly without having to remeber or guess
             torch.save(
-                {"model_state_dict": model.state_dict(), "activation": activation},
+                {
+                    "model_state_dict": model.state_dict(),
+                    "activation": activation,
+                    "seed": seed,
+                },
                 checkpoint_path,
             )
             print(f"[{activation}] saved best model -> {checkpoint_path}")
@@ -279,10 +294,21 @@ def train_one_method(activation, train_loader, val_loader, device):
         "activation": activation,
         "best_val_mae": best_mae,
         "checkpoint": checkpoint_path,
+        "seed": seed,
     }
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seed", type=int, default=TRAIN_SEED, help="model init / batch order seed")
+    ap.add_argument(
+        "--methods",
+        default=",".join(METHODS),
+        help="comma separated subset of none,relu,softplus",
+    )
+    args = ap.parse_args()
+    methods = [m.strip() for m in args.methods.split(",") if m.strip()]
+
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
     print("loading data")
@@ -331,8 +357,10 @@ def main():
     print("device:", device)
 
     results = []
-    for activation in METHODS:
-        result = train_one_method(activation, train_loader, val_loader, device)
+    for activation in methods:
+        result = train_one_method(
+            activation, train_loader, val_loader, device, seed=args.seed
+        )
         results.append(result)
 
     with open(RESULTS_LOG, "w") as f:
