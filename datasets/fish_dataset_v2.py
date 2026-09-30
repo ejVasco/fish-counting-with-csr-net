@@ -67,7 +67,12 @@ def _augment(image):
 
 class FishDataset(Dataset):
     def __init__(
-        self, datasets_dir=None, dataset_names=None, max_size=512, samples=None
+        self,
+        datasets_dir=None,
+        dataset_names=None,
+        max_size=512,
+        samples=None,
+        hflip=True,
     ):
         """
         can be constructed with exculsively 2 options (not both)
@@ -78,8 +83,10 @@ class FishDataset(Dataset):
             dataset_names: names of dataset folders in root_dir
             max_size: used to resize images so longest side is this, default=1024
             samples: list of {"image_path relative to project root":str, "points":list} to use instead of dataset names
+            hflip: randomly flip image + density horizontally (wrappers that add a mask flip it themselves)
         """  # TODO:
         self.max_size = max_size
+        self.hflip = hflip
 
         if samples is not None:
             # construction method 2: uses list of samples
@@ -156,7 +163,7 @@ class FishDataset(Dataset):
         density = density * (8 * 8)
 
         # random flipping horizontally
-        if random.random() > 0.5:
+        if self.hflip and random.random() > 0.5:
             image = np.fliplr(image).copy()
             density = np.fliplr(density).copy()
         # if random.random() > 0.5:
