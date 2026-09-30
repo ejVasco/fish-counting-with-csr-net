@@ -23,7 +23,9 @@ ALL_DATASETS = [
     "GX011284-fish-41-50",
     "yellow_tank_1",
     "yellow_tank_2",
-    "calibration_0fish",
+    # "calibration_0fish" removed: empty-tank frames (checkerboard) aren't a real use case,
+    # nobody needs a model to count a tank they can see is empty. it must stay last if re-added,
+    # since the split rng is shared across datasets in order
 ]
 
 TRAIN_RATIO = 0.70
