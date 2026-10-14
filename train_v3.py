@@ -302,6 +302,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=TRAIN_SEED, help="model init / batch order seed")
     ap.add_argument(
+        "--split-seed", type=int, default=RNG_SEED, help="train/val/test split seed"
+    )
+    ap.add_argument(
         "--methods",
         default=",".join(METHODS),
         help="comma separated subset of none,relu,softplus",
@@ -328,7 +331,7 @@ def main():
     dataset_circles = build_dataset_circles(DATA_ROOT, gathered, manual_masks)
 
     train_s, val_s, test_s = split_samples(
-        gathered, TRAIN_RATIO, VAL_RATIO, seed=RNG_SEED
+        gathered, TRAIN_RATIO, VAL_RATIO, seed=args.split_seed
     )
 
     save_paths(test_s, TEST_FILES_OUT)
