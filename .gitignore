@@ -213,3 +213,7 @@ __marimo__/
 *.mp4
 *_data.txt
 *genblankjson.py
+
+# training/test run logs (archived in checkpoints/runN/)
+/term_*.txt
+/train_results*.json
